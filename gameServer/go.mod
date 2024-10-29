@@ -1,4 +1,4 @@
-module snakeGameServer
+module github.com/simplegameserver/gameserver
 
 go 1.23.0
 

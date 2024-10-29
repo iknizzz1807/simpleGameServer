@@ -13,7 +13,7 @@ let players: any = [];
 let foods: any = [];
 let userID: string = "";
 
-const socket = new WebSocket("ws://localhost:8080/ws");
+const socket = new WebSocket("ws://localhost:8080/snake");
 
 export function initializeGame(canvasElement: HTMLCanvasElement) {
   canvas = canvasElement;
