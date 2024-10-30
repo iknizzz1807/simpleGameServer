@@ -13,9 +13,11 @@
   {@render children()}
   <div class="footer">
     {#if $currentUser}
-      <p>ID: {$currentUser.id}</p>
-      <p>Username: {$currentUser.username}</p>
-      <button onclick={handleLogout}>Logout</button>
+      <div>
+        <p>ID: {$currentUser.id}</p>
+        <p>Username: {$currentUser.username}</p>
+      </div>
+      <button onclick={handleLogout} class="logout-btn">Logout</button>
     {/if}
   </div>
 </main>
@@ -31,8 +33,19 @@
 
   .footer {
     width: 100%;
-    text-align: center;
     position: absolute;
     bottom: 0;
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: flex-end;
+  }
+
+  .logout-btn {
+    height: fit-content;
+  }
+
+  p {
+    margin: 0;
   }
 </style>
