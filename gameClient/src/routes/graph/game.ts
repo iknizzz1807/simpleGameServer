@@ -3,6 +3,7 @@ import { evaluate } from "mathjs";
 export interface Monster {
   x: number;
   y: number;
+  type: "player" | "other";
 }
 
 export class GraphGame {
@@ -11,11 +12,20 @@ export class GraphGame {
   private monsters: Monster[] = [];
   private SCALE = 20;
   private currentX: number;
+  private socket: WebSocket;
 
-  constructor(width: number, height: number) {
+  constructor(width: number, height: number, socket: WebSocket) {
     this.width = width;
     this.height = height;
     this.currentX = this.getInitialX();
+    this.socket = socket;
+
+    this.socket.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.type === "gameState") {
+        this.monsters = data.monsters;
+      }
+    };
   }
 
   private getInitialX(): number {
@@ -38,10 +48,12 @@ export class GraphGame {
     return { x, y };
   }
 
-  public addMonster() {
+  public addMonster(type: "player" | "other") {
     const x = Math.floor(Math.random() * 21) - 10;
     const y = Math.floor(Math.random() * 21) - 10;
-    this.monsters.push({ x, y });
+    const monster = { x, y, type };
+    this.monsters.push(monster);
+    this.socket.send(JSON.stringify({ type: "addMonster", monster }));
     return [...this.monsters];
   }
 
@@ -49,7 +61,6 @@ export class GraphGame {
     return [...this.monsters];
   }
 
-  // Check regex if type of x = a
   public isVerticalLine(expr: string): { isVertical: boolean; x: number } {
     const match = expr.match(/^\s*x\s*=\s*(-?\d*\.?\d+)\s*$/);
     if (match) {
@@ -59,7 +70,6 @@ export class GraphGame {
   }
 
   public validateExpression(expr: string): boolean {
-    // If vertical no need to validate more
     if (this.isVerticalLine(expr).isVertical) {
       return true;
     }
@@ -82,7 +92,6 @@ export class GraphGame {
     return collisionOccurred;
   }
 
-  // Draw vertical line
   public async animateVerticalLine(
     x: number,
     onStep: (points: { x: number; y: number }[], monsters: Monster[]) => void
@@ -90,12 +99,11 @@ export class GraphGame {
     const points: { x: number; y: number }[] = [];
     const canvasX = this.toCanvasCoords(x, 0).x;
 
-    // Make point straight up to down
     for (let y = this.height; y >= 0; y -= 5) {
       points.push({ x: canvasX, y });
       this.checkCollision(canvasX, y);
       onStep(points, [...this.monsters]);
-      await new Promise((resolve) => setTimeout(resolve, 10)); // Small delay
+      await new Promise((resolve) => setTimeout(resolve, 10));
     }
   }
 
@@ -103,14 +111,12 @@ export class GraphGame {
     expr: string,
     onStep: (points: { x: number; y: number }[], monsters: Monster[]) => void
   ) {
-    // Check if vertical line
     const verticalCheck = this.isVerticalLine(expr);
     if (verticalCheck.isVertical) {
       await this.animateVerticalLine(verticalCheck.x, onStep);
       return;
     }
 
-    // Xử lý các đường cong bình thường
     this.currentX = this.getInitialX();
     const points: { x: number; y: number }[] = [];
 
@@ -141,6 +147,7 @@ export class GraphGame {
       };
 
       step();
+      // Next player's turn
     });
   }
 }

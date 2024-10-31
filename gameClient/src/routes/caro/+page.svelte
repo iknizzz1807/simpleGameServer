@@ -2,8 +2,8 @@
   import { onMount, onDestroy } from "svelte";
   import { initializeGame, handleCanvasClick, resetGame } from "./game";
 
-  let canvas: HTMLCanvasElement;
-  let playerStatusTag: HTMLElement;
+  let canvas: HTMLCanvasElement = $state();
+  let playerStatusTag: HTMLElement = $state();
 
   onMount(() => {
     initializeGame(canvas, playerStatusTag);
@@ -16,7 +16,7 @@
 </script>
 
 <div bind:this={playerStatusTag}></div>
-<button on:click={resetGame}>Reset Game</button>
+<button onclick={resetGame}>Reset Game</button>
 <canvas bind:this={canvas}></canvas>
 
 <style>

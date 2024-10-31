@@ -15,7 +15,7 @@ import (
 const (
     gridSize   = 20
     initSize   = 3
-    canvasSize = 400
+    canvasSize = 600
 )
 
 var upgrader = websocket.Upgrader{

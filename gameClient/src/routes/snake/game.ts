@@ -4,7 +4,7 @@ import { currentUser } from "$lib/stores/currentUser";
 import type { User } from "$lib/stores/currentUser";
 
 const GRID_SIZE = 20;
-const CANVAS_SIZE = 400;
+const CANVAS_SIZE = 600;
 
 let canvas: HTMLCanvasElement;
 let ctx: CanvasRenderingContext2D | null;
@@ -65,7 +65,7 @@ function draw() {
 
 function drawGrid() {
   if (ctx) {
-    ctx.strokeStyle = "#ddd";
+    ctx.strokeStyle = "#363636";
     ctx.lineWidth = 0.5;
     for (let i = 0; i <= CANVAS_SIZE; i += GRID_SIZE) {
       ctx.beginPath();
