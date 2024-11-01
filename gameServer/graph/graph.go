@@ -157,6 +157,7 @@ func handlePlayerDisconnect(playerID string) {
 }
 
 func notifyPlayerJoinedAndLeave(playerId string, joinOrLeave string) {
+    // This will send a notification to the client
     joinOrLeaveMessage := fmt.Sprintf("%s %s the game", playerId, joinOrLeave)
     mu.Lock()
     joinOrLeaveMessages.Message = append(joinOrLeaveMessages.Message, joinOrLeaveMessage)

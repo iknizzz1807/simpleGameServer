@@ -2,8 +2,8 @@
   import { onMount, onDestroy } from "svelte";
   import { initializeGame, handleCanvasClick, resetGame } from "./game";
 
-  let canvas: HTMLCanvasElement = $state();
-  let playerStatusTag: HTMLElement = $state();
+  let canvas: HTMLCanvasElement;
+  let playerStatusTag: HTMLElement;
 
   onMount(() => {
     initializeGame(canvas, playerStatusTag);

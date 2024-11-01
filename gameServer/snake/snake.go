@@ -57,9 +57,20 @@ type InitMessage struct {
     PlayerID string `json:"playerId"`
 }
 
+type PlayerJoinedOrLeaveMessages struct {
+    Type        string   `json:"type"`
+    Message     []string `json:"message"`
+    TotalPlayer int      `json:"totalPlayer"`
+}
+
 var (
     players = make(map[string]*Player)
     foods   = make([]Food, 0)
+    joinOrLeaveMessages = PlayerJoinedOrLeaveMessages{
+        Type:        "playerJoinedOrLeave",
+        Message:     []string{},
+        TotalPlayer: 0,
+    }
     mu      sync.Mutex
 )
 
@@ -89,18 +100,55 @@ func initPlayer(id string) *Player {
     }
 }
 
+func pingPlayer(playerID string, conn *websocket.Conn) {
+    ticker := time.NewTicker(30 * time.Second)
+    defer ticker.Stop()
+
+    for {
+        select {
+        case <-ticker.C:
+            if err := conn.WriteControl(websocket.PingMessage, []byte{}, time.Now().Add(10*time.Second)); err != nil {
+                log.Printf("Ping failed for player %s: %v", playerID, err)
+                handlePlayerDisconnect(playerID)
+                return
+            }
+        }
+    }
+}
+
+func handlePlayerDisconnect(playerID string) {
+    mu.Lock()
+    if player, exists := players[playerID]; exists {
+        player.Conn.Close()
+        delete(players, playerID)
+        mu.Unlock()
+        notifyPlayerJoinedAndLeave(playerID, "leave")
+        log.Printf("Player %s disconnected", playerID)
+    } else {
+        mu.Unlock()
+    }
+}
+
 func HandleConnection(w http.ResponseWriter, r *http.Request) {
     conn, err := upgrader.Upgrade(w, r, nil)
     if err != nil {
         fmt.Println("Websocket error: ", err)
         return
     }
-    defer conn.Close()
+    
+    // Thiết lập các parameters cho connection
+    conn.SetReadLimit(512) // Giới hạn kích thước message
+    conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+    conn.SetPongHandler(func(string) error { 
+        conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+        return nil
+    })
 
     var initMsg InitMessage
     err = conn.ReadJSON(&initMsg)
     if err != nil || initMsg.Type != "init" {
         fmt.Println("Failed to read init message: ", err)
+        conn.Close()
         return
     }
 
@@ -111,20 +159,22 @@ func HandleConnection(w http.ResponseWriter, r *http.Request) {
     players[playerID].Conn = conn
     mu.Unlock()
 
-    log.Printf("New player connected: %s", playerID)
+    notifyPlayerJoinedAndLeave(playerID, "join")
+    log.Println("Joined player with id:", playerID)
 
+
+    // Khởi động goroutine cho ping
+    go pingPlayer(playerID, conn)
     // Handle messages
     for {
         var msg DirectionMessage
         err := conn.ReadJSON(&msg)
         if err != nil {
             log.Printf("Player disconnected: %s", playerID)
-            mu.Lock()
-            delete(players, playerID)
-            mu.Unlock()
+            handlePlayerDisconnect(playerID)
             break
         }
-
+        
         if msg.Type == "direction" {
             mu.Lock()
             if player, exists := players[playerID]; exists {
@@ -135,7 +185,41 @@ func HandleConnection(w http.ResponseWriter, r *http.Request) {
             }
             mu.Unlock()
         }
+        conn.SetReadDeadline(time.Now().Add(60 * time.Second))
     }
+}
+
+func notifyPlayerJoinedAndLeave(playerId string, joinOrLeave string) {
+    // This will send a notification to the client
+    joinOrLeaveMessage := fmt.Sprintf("%s %s the game", playerId, joinOrLeave)
+    mu.Lock()
+    joinOrLeaveMessages.Message = append(joinOrLeaveMessages.Message, joinOrLeaveMessage)
+    if joinOrLeave == "join" {
+        joinOrLeaveMessages.TotalPlayer++
+    } else if joinOrLeave == "leave" {
+        joinOrLeaveMessages.TotalPlayer--
+    }
+    
+    messageJSON, err := json.Marshal(joinOrLeaveMessages)
+    if err != nil {
+        log.Println("JSON Marshal error:", err)
+        mu.Unlock()
+        return
+    }
+    mu.Unlock()
+
+    broadcastMessage(messageJSON)
+}
+
+func broadcastMessage(message []byte) {
+    mu.Lock()
+    for playerID, player := range players {
+        if err := player.Conn.WriteMessage(websocket.TextMessage, message); err != nil {
+            log.Printf("Failed to send message to player %s: %v", playerID, err)
+            go handlePlayerDisconnect(playerID)
+        }
+    }
+    mu.Unlock()
 }
 
 func GameLoop() {

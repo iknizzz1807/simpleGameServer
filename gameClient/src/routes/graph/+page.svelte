@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, onDestroy } from "svelte";
   import { currentUser } from "$lib/stores/currentUser";
   import { get } from "svelte/store";
   import { GraphGame } from "./game";
@@ -51,6 +51,10 @@
     socket.onclose = () => {
       console.log("Disconnected from server");
     };
+  });
+
+  onDestroy(() => {
+    socket.close();
   });
 
   function drawAxes() {

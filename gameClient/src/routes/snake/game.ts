@@ -2,6 +2,7 @@
 import { get } from "svelte/store";
 import { currentUser } from "$lib/stores/currentUser";
 import type { User } from "$lib/stores/currentUser";
+import { messages, numOfPlayers } from "./store";
 
 const GRID_SIZE = 20;
 const CANVAS_SIZE = 600;
@@ -14,6 +15,10 @@ let foods: any = [];
 let userID: string = "";
 
 const socket = new WebSocket("ws://localhost:8080/snake");
+
+export function disconnect() {
+  socket.close();
+}
 
 export function initializeGame(canvasElement: HTMLCanvasElement) {
   canvas = canvasElement;
@@ -38,12 +43,17 @@ export function initializeGame(canvasElement: HTMLCanvasElement) {
 
   socket.onmessage = (event) => {
     // Receive message from the server
-    const gameState = JSON.parse(event.data);
+    const data = JSON.parse(event.data);
 
-    if (gameState.type === "gameState") {
-      players = gameState.players; // List of all the players
-      foods = gameState.foods; // List of all the food
+    if (data.type === "gameState") {
+      players = data.players; // List of all the players
+      foods = data.foods; // List of all the food
       draw();
+    } else if (data.type === "playerJoinedOrLeave") {
+      messages.update((currentMessages) => (currentMessages = data.message));
+      numOfPlayers.update(
+        (currrentNumOfPlayers) => (currrentNumOfPlayers = data.totalPlayer)
+      );
     }
   };
 
