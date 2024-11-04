@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
   import { initializeGame, disconnect } from "./game";
+  import type { number } from "mathjs";
   import { messages, numOfPlayers } from "./store";
 
   let canvas: HTMLCanvasElement;
