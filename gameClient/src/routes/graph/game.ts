@@ -1,153 +1,162 @@
 import { evaluate } from "mathjs";
 
-export interface Monster {
+export interface Point {
   x: number;
   y: number;
-  type: "player" | "other";
+}
+
+export interface Monster extends Point {
+  ofPlayer: string; // ID of the player who owns the monster
+}
+
+export interface Player {
+  id: string;
+  name: string;
+  score: number;
+  // Add other player properties if needed
 }
 
 export class GraphGame {
   private width: number;
   private height: number;
   private monsters: Monster[] = [];
-  private SCALE = 20;
-  private currentX: number;
+  private players: Player[] = []; // Added
+  private graphs: { [playerId: string]: Point[] } = {}; // Added
+  private SCALE = 20; // Pixels per unit
   private socket: WebSocket;
 
   constructor(width: number, height: number, socket: WebSocket) {
     this.width = width;
     this.height = height;
-    this.currentX = this.getInitialX();
     this.socket = socket;
-
-    this.socket.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      if (data.type === "gameState") {
-        this.monsters = data.monsters;
-      }
-    };
+    // Initialize other properties if needed
   }
 
-  private getInitialX(): number {
-    return -this.width / 2 / this.SCALE;
-  }
-
-  private getFinalX(): number {
-    return this.width / 2 / this.SCALE;
-  }
-
-  public toCanvasCoords(x: number, y: number) {
+  // --- Coordinate Conversion ---
+  public toCanvasCoords(x: number, y: number): Point {
     const canvasX = this.width / 2 + x * this.SCALE;
-    const canvasY = this.height / 2 - y * this.SCALE;
+    const canvasY = this.height / 2 - y * this.SCALE; // Y is inverted
     return { x: canvasX, y: canvasY };
   }
 
-  public fromCanvasCoords(canvasX: number, canvasY: number) {
+  public fromCanvasCoords(canvasX: number, canvasY: number): Point {
     const x = (canvasX - this.width / 2) / this.SCALE;
-    const y = (this.height / 2 - canvasY) / this.SCALE;
+    const y = (this.height / 2 - canvasY) / this.SCALE; // Y is inverted
     return { x, y };
   }
 
-  public addMonster(type: "player" | "other") {
-    const x = Math.floor(Math.random() * 21) - 10;
-    const y = Math.floor(Math.random() * 21) - 10;
-    const monster = { x, y, type };
+  // --- Game State Updates (Called from Svelte component based on WebSocket messages) ---
+  public updateMonsters(newMonsters: Monster[]): void {
+    this.monsters = newMonsters;
+  }
+
+  public updatePlayers(newPlayers: Player[]): void {
+    this.players = newPlayers;
+  }
+
+  public updateGraphs(newGraphs: { [playerId: string]: Point[] }): void {
+    this.graphs = newGraphs;
+  }
+
+  // --- Getters for Svelte component ---
+  public getMonsters(): Monster[] {
+    return [...this.monsters]; // Return a copy
+  }
+
+  public getPlayers(): Player[] {
+    return [...this.players]; // Return a copy
+  }
+
+  public getGraphs(): { [playerId: string]: Point[] } {
+    return { ...this.graphs }; // Return a copy
+  }
+
+  public getScale() {
+    return this.SCALE;
+  }
+
+  // --- Game Actions ---
+  public addMonster(playerId: string): Monster | null {
+    // Example: Add a monster at a random *game* coordinate
+    const gameX =
+      Math.random() * (this.width / this.SCALE) - this.width / (2 * this.SCALE);
+    const gameY =
+      Math.random() * (this.height / this.SCALE) -
+      this.height / (2 * this.SCALE);
+    const monster: Monster = { x: gameX, y: gameY, ofPlayer: playerId };
     this.monsters.push(monster);
-    this.socket.send(JSON.stringify({ type: "addMonster", monster }));
-    return [...this.monsters];
+    console.log("Added monster locally:", monster);
+    return monster;
   }
 
-  public getMonsters() {
-    return [...this.monsters];
-  }
-
-  public isVerticalLine(expr: string): { isVertical: boolean; x: number } {
-    const match = expr.match(/^\s*x\s*=\s*(-?\d*\.?\d+)\s*$/);
-    if (match) {
-      return { isVertical: true, x: parseFloat(match[1]) };
-    }
-    return { isVertical: false, x: 0 };
-  }
-
+  // --- Expression Handling & Graph Generation ---
   public validateExpression(expr: string): boolean {
-    if (this.isVerticalLine(expr).isVertical) {
-      return true;
+    // Basic check: Does it contain 'x'? More robust parsing might be needed.
+    if (!expr.includes("x")) {
+      return false;
     }
-
     try {
-      evaluate(expr, { x: 0 });
+      // Test evaluation with a sample value
+      evaluate(expr.replace(/=.*$/, "").trim(), { x: 1 }); // Remove 'y=' if present
       return true;
     } catch (error) {
+      console.error("Invalid expression:", error);
       return false;
     }
   }
 
-  private checkCollision(x: number, y: number) {
-    let collisionOccurred = false;
-    this.monsters = this.monsters.filter((monster) => {
-      const { x: mx, y: my } = this.toCanvasCoords(monster.x, monster.y);
-      const distance = Math.hypot(mx - x, my - y);
-      return distance >= 5;
+  public async generateGraphPoints(expr: string): Promise<Point[]> {
+    const points: Point[] = [];
+    const step = 0.1; // Resolution of the graph
+    const startX = -this.width / (2 * this.SCALE);
+    const endX = this.width / (2 * this.SCALE);
+
+    return new Promise((resolve, reject) => {
+      try {
+        const compiledExpr = evaluate(`f(x) = ${expr}`); // Compile expression
+        for (let x = startX; x <= endX; x += step) {
+          const y = compiledExpr({ x });
+          // Check for valid numbers, skip if NaN or Infinity
+          if (Number.isFinite(y)) {
+            points.push({ x, y });
+          }
+        }
+        resolve(points);
+      } catch (error) {
+        console.error("Error evaluating expression:", error);
+        reject(error);
+      }
     });
-    return collisionOccurred;
   }
 
-  public async animateVerticalLine(
-    x: number,
-    onStep: (points: { x: number; y: number }[], monsters: Monster[]) => void
-  ) {
-    const points: { x: number; y: number }[] = [];
-    const canvasX = this.toCanvasCoords(x, 0).x;
-
-    for (let y = this.height; y >= 0; y -= 5) {
-      points.push({ x: canvasX, y });
-      this.checkCollision(canvasX, y);
-      onStep(points, [...this.monsters]);
-      await new Promise((resolve) => setTimeout(resolve, 10));
-    }
-  }
-
+  // --- Animation ---
   public async animateGraph(
     expr: string,
-    onStep: (points: { x: number; y: number }[], monsters: Monster[]) => void
-  ) {
-    const verticalCheck = this.isVerticalLine(expr);
-    if (verticalCheck.isVertical) {
-      await this.animateVerticalLine(verticalCheck.x, onStep);
-      return;
-    }
-
-    this.currentX = this.getInitialX();
-    const points: { x: number; y: number }[] = [];
+    onStep: (currentPoints: Point[], isDone: boolean) => void
+  ): Promise<void> {
+    const allPoints = await this.generateGraphPoints(expr);
+    let currentPoints: Point[] = [];
+    const pointsPerFrame = 5; // Adjust for animation speed
 
     return new Promise<void>((resolve) => {
+      let index = 0;
       const step = () => {
-        if (this.currentX > this.getFinalX()) {
+        if (index >= allPoints.length) {
+          onStep(currentPoints, true); // Final step
           resolve();
           return;
         }
 
-        try {
-          const y = evaluate(expr, { x: this.currentX });
-          const { x: canvasX, y: canvasY } = this.toCanvasCoords(
-            this.currentX,
-            y
-          );
+        // Add a chunk of points for this frame
+        const endSlice = Math.min(index + pointsPerFrame, allPoints.length);
+        currentPoints = allPoints.slice(0, endSlice);
 
-          points.push({ x: canvasX, y: canvasY });
-          this.checkCollision(canvasX, canvasY);
+        onStep(currentPoints, false); // Intermediate step
 
-          onStep(points, [...this.monsters]);
-
-          this.currentX += 0.1;
-          requestAnimationFrame(step);
-        } catch (error) {
-          resolve();
-        }
+        index += pointsPerFrame;
+        requestAnimationFrame(step); // Schedule next frame
       };
-
-      step();
-      // Next player's turn
+      requestAnimationFrame(step); // Start animation
     });
   }
 }

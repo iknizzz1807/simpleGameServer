@@ -4,21 +4,27 @@
   import ChooseGameMenu from "$lib/components/+ChooseGameMenu.svelte";
 </script>
 
-<main class="webpage">
+<!-- .page-content sẽ căn giữa nội dung bên trong khu vực main-content của layout -->
+<div class="page-content">
   {#if $currentUser}
-    <!-- Using this mean you let the framework subscribe to the StorageEvent
-    automaticly for you, if you want to attach this store to another
-    reactive state, you have to subscribe manually -->
     <ChooseGameMenu />
   {:else}
     <LoginForm />
   {/if}
-</main>
+</div>
 
 <style>
-  .webpage {
+  .page-content {
     display: flex;
-    justify-content: center;
-    align-items: center;
+    flex-direction: column; /* Sắp xếp nội dung theo chiều dọc nếu cần */
+    justify-content: center; /* Căn giữa theo chiều dọc */
+    align-items: center; /* Căn giữa theo chiều ngang */
+    flex-grow: 1; /* Đảm bảo nó cố gắng chiếm không gian trong main-content */
+    padding: 20px; /* Thêm khoảng đệm */
+    /* Đặt chiều cao tối thiểu để việc căn giữa dọc hoạt động tốt hơn trong một số trường hợp */
+    min-height: calc(
+      100vh - 150px
+    ); /* Ví dụ: 100vh trừ đi chiều cao ước tính của header/footer */
+    box-sizing: border-box;
   }
 </style>
